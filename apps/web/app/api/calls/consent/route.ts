@@ -4,6 +4,7 @@ import { HttpError, apiRoute, parseBody } from "@server/http";
 import { consentRecordCreate } from "@server/schemas";
 import { getOwnedSession } from "@server/sessions";
 import { store, utcNow } from "@server/store";
+import { auditConsentRecordCreated } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
@@ -20,6 +21,12 @@ export const POST = apiRoute(async (request) => {
     recording_consented: consent.recording_consented,
     terms_consented: consent.terms_consented,
     consent_timestamp: utcNow()
+  });
+  auditConsentRecordCreated({
+      sessionId: consent.session_id,
+      userId: userId,
+      recordingConsented: consent.recording_consented,
+      termsConsented: consent.terms_consented
   });
   await store.update("sessions", consent.session_id, {
     consent_given_at: utcNow(),
