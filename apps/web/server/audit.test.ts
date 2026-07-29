@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { auditPaymentWebHookReceived } from "./audit";
 import { auditQueueEntryCreated } from "./audit";
+import { auditConsentRecordCreated   } from "./audit";
 
 describe("auditPaymentWebhookReceived", () => {
   it("returns the expected structured audit fields", () => {
@@ -87,6 +88,52 @@ describe("auditQueueEntryCreated", () => {
     const result = auditQueueEntryCreated({
       sessionId: "session-123",
       userId: "user-456",
+    });
+
+    expect(result).not.toHaveProperty("payload");
+    expect(result).not.toHaveProperty("requestBody");
+    expect(result).not.toHaveProperty("token");
+    expect(result).not.toHaveProperty("secret");
+
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("auditConsentRecordCreated", () => {
+  it("returns the expected consent record audit fields", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result = auditConsentRecordCreated({
+      sessionId: "session-123",
+      userId: "user-456",
+      recordingConsented: true,
+      termsConsented: true
+    });
+
+    expect(result.level).toBe("info");
+    expect(result.component).toBe("consent");
+    expect(result.auditEventType).toBe("consent_record_created");
+    expect(result.sessionId).toBe("session-123");
+    expect(result.userId).toBe("user-456");
+    expect(result.timestamp).toBeTruthy();
+    expect(result.correlationId).toBeTruthy();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+
+    consoleSpy.mockRestore();
+  });
+
+  it("does not include request bodies, tokens, or secrets", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result = auditConsentRecordCreated({
+      sessionId: "session-123",
+      userId: "user-456",
+      recordingConsented: true,
+      termsConsented: true
     });
 
     expect(result).not.toHaveProperty("payload");
