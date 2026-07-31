@@ -5,6 +5,7 @@ import { callsClient } from "@server/integrations";
 import { createRoomRequest } from "@server/schemas";
 import { getOwnedSession } from "@server/sessions";
 import { store, utcNow } from "@server/store";
+import { auditCallStarted } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
@@ -19,6 +20,11 @@ export const POST = apiRoute(async (request) => {
   await store.update("sessions", payload.session_id, {
     status: "active",
     started_at: utcNow()
+  });
+  auditCallStarted({
+    sessionId: payload.session_id,
+    userId,
+    status: "active"
   });
   return NextResponse.json({ session, room }, { status: 201 });
 });

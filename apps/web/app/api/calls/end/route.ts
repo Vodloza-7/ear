@@ -4,6 +4,7 @@ import { apiRoute, parseBody } from "@server/http";
 import { endCallRequest } from "@server/schemas";
 import { getOwnedSession } from "@server/sessions";
 import { store, utcNow } from "@server/store";
+import { auditCallEnded } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
@@ -17,5 +18,10 @@ export const POST = apiRoute(async (request) => {
     end_reason: payload.reason,
     refund_requested: payload.refund_requested
   });
+  auditCallEnded({
+    sessionId: payload.session_id,
+    userId: userId,
+    status:"ended"
+  })
   return NextResponse.json({ status: "ended", session_id: payload.session_id });
 });

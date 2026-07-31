@@ -100,3 +100,70 @@ export function auditConsentRecordCreated(
  console.info(JSON.stringify(auditRecord));
  return auditRecord;
  }
+ type auditCallStartedInput={
+    sessionId?:String,
+    userId?:String,
+    started_at?: Date,
+    status?:String
+ }
+ type auditCallStartedRecord={
+    timestamp: String;
+    correlationId: String;
+    level: "info";
+    component:"calls"
+    auditEventType: "call_started";
+    sessionId:String | null;
+    userId:String | null;
+    started_at:Date | null;
+    status: String | null;
+ }
+ export function auditCallStarted(
+    input:auditCallStartedInput,):
+    auditCallStartedRecord{
+    const auditRecord: auditCallStartedRecord={
+    timestamp:new Date().toISOString(),
+    correlationId:crypto.randomUUID(),
+    level: "info",
+    component:"calls",
+    auditEventType: "call_started",
+    sessionId:input.sessionId??null,
+    userId: input.userId??null,
+    started_at: input.started_at ?? null,
+    status: input.status ?? null
+    };
+console.info(JSON.stringify(auditRecord));
+return auditRecord;
+    }
+
+ type auditCallEndedInput={
+    sessionId?:string,
+    userId?:string,
+    status?:String
+ }
+ type auditCallEndedRecord={
+    timestamp: String;
+    correlationId: String;
+    level: "info";
+    component:"calls"
+    auditEventType: "call_ended";
+    sessionId:String | null;
+    userId:String | null;
+    status: String | null;
+
+ }
+ export function auditCallEnded(
+    input:auditCallEndedInput,):
+    auditCallEndedRecord{
+    const auditRecord: auditCallEndedRecord={
+    timestamp:new Date().toISOString(),
+    correlationId:crypto.randomUUID(),
+    level: "info",
+    component:"calls",
+    auditEventType: "call_ended",
+    sessionId:input.sessionId??null,
+    userId: input.userId??null,
+    status: input.status ?? null
+    };
+console.info(JSON.stringify(auditRecord));
+return auditRecord;
+    }
