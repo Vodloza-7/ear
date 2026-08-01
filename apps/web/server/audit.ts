@@ -167,3 +167,31 @@ return auditRecord;
 console.info(JSON.stringify(auditRecord));
 return auditRecord;
     }
+type auditRecordingStoredInput={
+    sessionId?:String,
+    providerRecordingId?:String |null,
+    }
+type auditRecordingStoredRecord={
+    timestamp: String;
+    correlationId: String;
+    level: "info";
+    component:"recordings"
+    auditEventType: "recording_stored";
+    sessionId:String | null;
+    providerRecordingId:String | undefined | null;
+}
+export function auditRecordingStored(
+    input:auditRecordingStoredInput,):
+    auditRecordingStoredRecord{
+    const auditRecord: auditRecordingStoredRecord={
+    timestamp:new Date().toISOString(),
+    correlationId:crypto.randomUUID(),
+    level: "info",
+    component:"recordings",
+    auditEventType: "recording_stored",
+    sessionId:input.sessionId??null,
+    providerRecordingId: input.providerRecordingId ?? null,
+ };
+ console.info(JSON.stringify(auditRecord));
+ return auditRecord;
+ }

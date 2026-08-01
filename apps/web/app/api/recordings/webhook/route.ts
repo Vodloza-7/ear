@@ -5,6 +5,7 @@ import { storageClient } from "@server/integrations";
 import { recordingWebhookRequest } from "@server/schemas";
 import { getSession } from "@server/sessions";
 import { store, utcNow } from "@server/store";
+import { auditRecordingStored } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   requireRecordingWebhook(request);
@@ -21,6 +22,10 @@ export const POST = apiRoute(async (request) => {
     signed_upload_url_created: Boolean(signedUploadUrl),
     duration_seconds: payload.duration_seconds,
     created_at: utcNow()
+  });
+  auditRecordingStored({
+    sessionId: payload.session_id,
+    providerRecordingId: payload.provider_recording_id,
   });
   await store.update("sessions", payload.session_id, { recording_url: objectName });
   return NextResponse.json(
