@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { auditPaymentWebHookReceived } from "./audit";
+import { auditPaymentWebHookReceived} from "./audit";
 import { auditQueueEntryCreated } from "./audit";
 import { auditConsentRecordCreated   } from "./audit";
 import { auditCallStarted } from "./audit";
 import {auditCallEnded } from "./audit";
+import {auditRecordingStored } from "./audit";
 
 describe("auditPaymentWebhookReceived", () => {
   it("returns the expected structured audit fields", () => {
@@ -225,6 +226,48 @@ describe("auditCallEnded", () => {
       sessionId: "session-123",
       userId: "user-456",
       status: "ended"
+    });
+
+    expect(result).not.toHaveProperty("payload");
+    expect(result).not.toHaveProperty("requestBody");
+    expect(result).not.toHaveProperty("token");
+    expect(result).not.toHaveProperty("secret");
+
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("auditRecordingStored", () => {
+  it("returns the expected recording stored audit fields", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result= auditRecordingStored({
+      sessionId: "session-123",
+      providerRecordingId: "recording-456",
+    });
+
+    expect(result.level).toBe("info");
+    expect(result.component).toBe("recordings");
+    expect(result.auditEventType).toBe("recording_stored");
+    expect(result.sessionId).toBe("session-123");
+    expect(result.timestamp).toBeTruthy();
+    expect(result.correlationId).toBeTruthy();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+
+
+    consoleSpy.mockRestore();
+  });
+
+  it("does not include request bodies, tokens, or secrets", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result = auditRecordingStored({
+      sessionId: "session-123",
+      providerRecordingId:"recording-456",
     });
 
     expect(result).not.toHaveProperty("payload");
