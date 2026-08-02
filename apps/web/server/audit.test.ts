@@ -6,6 +6,7 @@ import { auditConsentRecordCreated   } from "./audit";
 import { auditCallStarted } from "./audit";
 import {auditCallEnded } from "./audit";
 import {auditRecordingStored } from "./audit";
+import {auditBanCreated } from "./audit";
 
 describe("auditPaymentWebhookReceived", () => {
   it("returns the expected structured audit fields", () => {
@@ -268,6 +269,54 @@ describe("auditRecordingStored", () => {
     const result = auditRecordingStored({
       sessionId: "session-123",
       providerRecordingId:"recording-456",
+    });
+
+    expect(result).not.toHaveProperty("payload");
+    expect(result).not.toHaveProperty("requestBody");
+    expect(result).not.toHaveProperty("token");
+    expect(result).not.toHaveProperty("secret");
+
+    consoleSpy.mockRestore();
+  });
+});
+describe("auditBanCreated", () => {
+  it("returns the expected recording stored audit fields", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result= auditBanCreated({
+      userId: "user-456",
+      banType: "standard",
+      createdBy: "admin-789",
+      banId: "ban1"
+    });
+
+    expect(result.level).toBe("info");
+    expect(result.component).toBe("ban");
+    expect(result.auditEventType).toBe("ban_created");
+    expect(result.userId).toBe("user-456");
+    expect(result.banType).toBe("standard");
+    expect(result.createdBy).toBe("admin-789");
+    expect(result.banId).toBe("ban1");
+    expect(result.timestamp).toBeTruthy();
+    expect(result.correlationId).toBeTruthy();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+
+
+    consoleSpy.mockRestore();
+  });
+
+  it("does not include request bodies, tokens, or secrets", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result = auditBanCreated({
+      userId: "user-456",
+      banType: "standard",
+      createdBy: "admin-789",
+      banId: "ban1"
     });
 
     expect(result).not.toHaveProperty("payload");
