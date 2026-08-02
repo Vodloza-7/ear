@@ -3,6 +3,7 @@ import { currentUser, requireSelfOrStaff } from "@server/auth";
 import { HttpError, apiRoute, parseBody } from "@server/http";
 import { banAppealRequest } from "@server/schemas";
 import { store } from "@server/store";
+import { auditBanAppealCreated } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   const actor = await currentUser(request);
@@ -26,6 +27,14 @@ export const POST = apiRoute(async (request) => {
     review_fee_cents: 5000,
     status: "payment_required",
     created_by: actor.uid
+  });
+  auditBanAppealCreated({
+    appealId: appeal.id,
+    userId: payload.user_id,
+    banId: payload.ban_id,
+    createdBy: actor.uid,
+    status: "payment_required",
+    reviewFeeCents: 5000,
   });
   return NextResponse.json(appeal, { status: 201 });
 });
