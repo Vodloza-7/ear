@@ -101,21 +101,21 @@ export function auditConsentRecordCreated(
  return auditRecord;
  }
  type auditCallStartedInput={
-    sessionId?:String,
-    userId?:String,
+    sessionId?:string,
+    userId?:string,
     started_at?: Date,
-    status?:String
+    status?:string
  }
  type auditCallStartedRecord={
-    timestamp: String;
-    correlationId: String;
+    timestamp: string;
+    correlationId: string;
     level: "info";
     component:"calls"
     auditEventType: "call_started";
-    sessionId:String | null;
-    userId:String | null;
+    sessionId:string | null;
+    userId:string | null;
     started_at:Date | null;
-    status: String | null;
+    status: string | null;
  }
  export function auditCallStarted(
     input:auditCallStartedInput,):
@@ -138,17 +138,17 @@ return auditRecord;
  type auditCallEndedInput={
     sessionId?:string,
     userId?:string,
-    status?:String
+    status?:string
  }
  type auditCallEndedRecord={
-    timestamp: String;
-    correlationId: String;
+    timestamp: string;
+    correlationId: string;
     level: "info";
     component:"calls"
     auditEventType: "call_ended";
-    sessionId:String | null;
-    userId:String | null;
-    status: String | null;
+    sessionId:string | null;
+    userId:string | null;
+    status: string | null;
 
  }
  export function auditCallEnded(
@@ -168,17 +168,17 @@ console.info(JSON.stringify(auditRecord));
 return auditRecord;
     }
 type auditRecordingStoredInput={
-    sessionId?:String,
-    providerRecordingId?:String |null,
+    sessionId?:string,
+    providerRecordingId?:string |null,
     }
 type auditRecordingStoredRecord={
-    timestamp: String;
-    correlationId: String;
+    timestamp: string;
+    correlationId: string;
     level: "info";
     component:"recordings"
     auditEventType: "recording_stored";
-    sessionId:String | null;
-    providerRecordingId:String | undefined | null;
+    sessionId:string | null;
+    providerRecordingId:string | undefined | null;
 }
 export function auditRecordingStored(
     input:auditRecordingStoredInput,):
@@ -195,3 +195,37 @@ export function auditRecordingStored(
  console.info(JSON.stringify(auditRecord));
  return auditRecord;
  }
+type auditBanCreatedInput={
+    userId?:string,
+    banType?:string,
+    createdBy?:string,
+    banId?:string,
+}
+type auditBanCreatedRecord={
+    timestamp: string;
+    correlationId: string;
+    level: "info";
+    component:"ban";
+    auditEventType: "ban_created";
+    userId:string | null;
+    banType:string | null;
+    createdBy:string | null;
+    banId:string | null;
+}
+export function auditBanCreated(
+    input:auditBanCreatedInput,):
+    auditBanCreatedRecord{
+    const auditRecord: auditBanCreatedRecord={
+    timestamp:new Date().toISOString(),
+    correlationId:crypto.randomUUID(),
+    level: "info",
+    component:"ban",
+    auditEventType: "ban_created",
+    userId:input.userId??null,
+    banType: input.banType ?? null,
+    createdBy: input.createdBy ?? null,
+    banId: input.banId ?? null
+};
+console.info(JSON.stringify(auditRecord));
+return auditRecord;
+    }

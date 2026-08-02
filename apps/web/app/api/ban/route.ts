@@ -3,6 +3,7 @@ import { requireHost } from "@server/auth";
 import { apiRoute, parseBody } from "@server/http";
 import { banRequest } from "@server/schemas";
 import { store } from "@server/store";
+import { auditBanCreated } from "@server/audit";
 
 export const POST = apiRoute(async (request) => {
   const actor = await requireHost(request);
@@ -13,6 +14,12 @@ export const POST = apiRoute(async (request) => {
     reason: payload.reason,
     appeal_eligible: payload.ban_type === "standard",
     created_by: actor.uid
+  });
+  auditBanCreated({
+    userId: payload.user_id,
+    banType: payload.ban_type,
+    createdBy: actor.uid,
+    banId: ban.id
   });
   return NextResponse.json(ban, { status: 201 });
 });
