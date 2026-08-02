@@ -229,3 +229,43 @@ export function auditBanCreated(
 console.info(JSON.stringify(auditRecord));
 return auditRecord;
     }
+type auditBanAppealCreatedInput={
+    appealId?:string,
+    userId?:string,
+    banId?:string,
+    createdBy?:string,
+    status?:string,
+    reviewFeeCents?:number,
+}
+type auditBanAppealCreatedRecord={
+    timestamp: string;
+    correlationId: string;
+    level: "info";
+    component:"ban-appeal";
+    auditEventType: "ban_appeal_created";
+    appealId:string | null;
+    userId:string | null;
+    banId:string | null;
+    createdBy:string | null;
+    status:string | null | undefined;
+    reviewFeeCents:number | null;
+}
+export function auditBanAppealCreated(
+    input:auditBanAppealCreatedInput,):
+    auditBanAppealCreatedRecord{
+    const auditRecord: auditBanAppealCreatedRecord={
+    timestamp:new Date().toISOString(),
+    correlationId:crypto.randomUUID(),
+    level: "info",
+    component:"ban-appeal",
+    auditEventType: "ban_appeal_created",
+    appealId:input.appealId??null,
+    userId: input.userId??null,
+    banId: input.banId ?? null,
+    createdBy: input.createdBy ?? null,
+    status: input.status ?? null,
+    reviewFeeCents: input.reviewFeeCents ?? null
+};
+console.info(JSON.stringify(auditRecord));
+return auditRecord;
+}

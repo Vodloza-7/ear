@@ -7,6 +7,7 @@ import { auditCallStarted } from "./audit";
 import {auditCallEnded } from "./audit";
 import {auditRecordingStored } from "./audit";
 import {auditBanCreated } from "./audit";
+import {auditBanAppealCreated } from "./audit";
 
 describe("auditPaymentWebhookReceived", () => {
   it("returns the expected structured audit fields", () => {
@@ -280,7 +281,7 @@ describe("auditRecordingStored", () => {
   });
 });
 describe("auditBanCreated", () => {
-  it("returns the expected recording stored audit fields", () => {
+  it("returns the expected ban created audit fields", () => {
     const consoleSpy = vi
       .spyOn(console, "info")
       .mockImplementation(() => undefined);
@@ -323,6 +324,61 @@ describe("auditBanCreated", () => {
     expect(result).not.toHaveProperty("requestBody");
     expect(result).not.toHaveProperty("token");
     expect(result).not.toHaveProperty("secret");
+
+    consoleSpy.mockRestore();
+  });
+});
+describe("auditBanAppealCreated", () => {
+  it("returns the expected ban appeal created audit fields", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result= auditBanAppealCreated({
+      userId: "user-456",
+      banId: "ban-123",
+      appealId: "appeal-123",
+      status: "payment_required",
+      reviewFeeCents: 5000,
+      createdBy: "admin-789",
+    });
+
+    expect(result.level).toBe("info");
+    expect(result.component).toBe("ban-appeal");
+    expect(result.auditEventType).toBe("ban_appeal_created");
+    expect(result.userId).toBe("user-456");
+    expect(result.banId).toBe("ban-123");
+    expect(result.appealId).toBe("appeal-123");
+    expect(result.createdBy).toBe("admin-789");
+    expect(result.status).toBe("payment_required");
+    expect(result.reviewFeeCents).toBe(5000);
+    expect(result.timestamp).toBeTruthy();
+    expect(result.correlationId).toBeTruthy();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+
+
+    consoleSpy.mockRestore();
+  });
+
+  it("does not include request bodies, tokens, or secrets", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const result = auditBanAppealCreated({
+      userId: "user-456",
+      banId: "ban-123",
+      appealId: "appeal-123",
+      status: "payment_required",
+      reviewFeeCents: 5000,
+      createdBy: "admin-789",
+    });
+
+    expect(result).not.toHaveProperty("payload");
+    expect(result).not.toHaveProperty("requestBody");
+    expect(result).not.toHaveProperty("token");
+    expect(result).not.toHaveProperty("secret");
+    expect(result).not.toHaveProperty("statement");
 
     consoleSpy.mockRestore();
   });
