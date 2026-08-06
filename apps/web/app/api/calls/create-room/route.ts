@@ -6,9 +6,11 @@ import { createRoomRequest } from "@server/schemas";
 import { getOwnedSession } from "@server/sessions";
 import { store, utcNow } from "@server/store";
 import { auditCallStarted } from "@server/audit";
+import { requireNoActiveBan } from "@server/bans";
 
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
+  await requireNoActiveBan(userId);
   const payload = await parseBody(request, createRoomRequest);
 
   if (!payload.consent_given) {

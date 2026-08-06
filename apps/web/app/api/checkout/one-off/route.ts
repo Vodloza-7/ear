@@ -4,9 +4,10 @@ import { apiRoute, parseBody } from "@server/http";
 import { ONE_OFF_PRODUCTS, stripeClient } from "@server/integrations";
 import { checkoutOneOffRequest } from "@server/schemas";
 import { store } from "@server/store";
-
+import { requireNoActiveBan } from "@server/bans";
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
+  await requireNoActiveBan(userId);
   const payload = await parseBody(request, checkoutOneOffRequest);
 
   const product = ONE_OFF_PRODUCTS[payload.product];
@@ -38,7 +39,6 @@ export const POST = apiRoute(async (request) => {
     stripe_checkout_session_id: checkout.stripe_session_id,
     status: checkout.configured ? "checkout_created" : "preview_checkout"
   });
-
   return NextResponse.json(
     {
       checkout_url: checkout.checkout_url,
