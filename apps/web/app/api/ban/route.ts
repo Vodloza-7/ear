@@ -13,7 +13,8 @@ export const POST = apiRoute(async (request) => {
     ban_type: payload.ban_type,
     reason: payload.reason,
     appeal_eligible: payload.ban_type === "standard",
-    created_by: actor.uid
+    status: "active",
+    created_by: actor.uid,
   });
   auditBanCreated({
     userId: payload.user_id,

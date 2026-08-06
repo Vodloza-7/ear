@@ -4,10 +4,12 @@ import { apiRoute, parseBody } from "@server/http";
 import { queueJoinRequest } from "@server/schemas";
 import { getOwnedSession } from "@server/sessions";
 import { store } from "@server/store";
-import { auditQueueEntryCreated } from "@server/audit";   
+import { auditQueueEntryCreated } from "@server/audit";
+import { requireNoActiveBan } from "@server/bans";
 
 export const POST = apiRoute(async (request) => {
   const userId = await currentUserId(request);
+  await requireNoActiveBan(userId);
   const payload = await parseBody(request, queueJoinRequest);
   const session = await getOwnedSession(payload.session_id, userId);
 
