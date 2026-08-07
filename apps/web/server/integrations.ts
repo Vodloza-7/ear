@@ -16,7 +16,12 @@ export const SUBSCRIPTION_PRODUCTS = {
   close_friend: { name: "Close Friend", amount_cents: 2999 },
   always_there: { name: "Always There", amount_cents: 4900 }
 } as const;
-
+export const BAN_APPEAL_REVIEW = {
+  name: "Ban appeal manual review",
+  description:
+    "This payment purchases a manual review only and does not guarantee reinstatement.",
+  amount_cents: 5000
+} as const;
 export type OneOffProductKey = keyof typeof ONE_OFF_PRODUCTS;
 export type SubscriptionPlanKey = keyof typeof SUBSCRIPTION_PRODUCTS;
 
@@ -99,7 +104,58 @@ export const stripeClient = {
       stripe_session_id: checkout.id
     };
   },
+  async createBanAppealCheckout(options: {
+    appealId: string;
+    banId: string;
+    userId: string;
+  }): Promise<CheckoutResult> {
+    const { appealId, banId, userId } = options;
 
+    if (!this.configured) {
+      return {
+        configured: false,
+        checkout_url: `${settings.appBaseUrl}/account?appeal=${appealId}&preview=1`,
+        stripe_session_id: `preview_appeal_${appealId}`
+      };
+    }
+
+    const checkout = await this.client().checkout.sessions.create(
+      {
+        mode: "payment",
+        success_url: `${settings.appBaseUrl}/account?appeal=${appealId}&payment=success`,
+        cancel_url: `${settings.appBaseUrl}/account?appeal=${appealId}&payment=cancelled`,
+        client_reference_id: appealId,
+        metadata: {
+          payment_type: "ban_appeal_review",
+          appeal_id: appealId,
+          ban_id: banId,
+          user_id: userId
+        },
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: BAN_APPEAL_REVIEW.amount_cents,
+              product_data: {
+                name: BAN_APPEAL_REVIEW.name,
+                description: BAN_APPEAL_REVIEW.description
+              }
+            }
+          }
+        ]
+      },
+      {
+        idempotencyKey: `ban-appeal-review:${appealId}`
+      }
+    );
+
+    return {
+      configured: true,
+      checkout_url: checkout.url ?? "",
+      stripe_session_id: checkout.id
+    };
+  },
   async createSubscriptionCheckout(options: {
     userId: string;
     planKey: SubscriptionPlanKey;

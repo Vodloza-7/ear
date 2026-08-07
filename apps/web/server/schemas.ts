@@ -78,6 +78,9 @@ export const banAppealRequest = z.object({
   ban_id: z.string().min(1),
   statement: z.string().min(10).max(5000)
 });
+export const checkoutBanAppealRequest = z.object({
+  appeal_id: z.string().min(1)
+});
 
 export const reportRequest = z.object({
   session_id: z.string().min(1),
