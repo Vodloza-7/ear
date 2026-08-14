@@ -27,7 +27,8 @@ describe("createBanAppealCheckout", () => {
     const options = {
       appealId: "appeal-123",
       banId: "ban-123",
-      userId: "user-123"
+      userId: "user-123",
+      attemptId: "attempt-123"
     };
 
     await stripeClient.createBanAppealCheckout(options);
@@ -38,14 +39,14 @@ describe("createBanAppealCheckout", () => {
       1,
       expect.any(Object),
       {
-        idempotencyKey: "ban-appeal-review:appeal-123"
+        idempotencyKey: "ban-appeal-review:appeal-123:attempt-123"
       }
     );
     expect(create).toHaveBeenNthCalledWith(
       2,
       expect.any(Object),
       {
-        idempotencyKey: "ban-appeal-review:appeal-123"
+        idempotencyKey: "ban-appeal-review:appeal-123:attempt-123"
       }
     );
   });

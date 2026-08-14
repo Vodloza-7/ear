@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { currentUserId } from "@server/auth";
 import { isActiveBan } from "@server/bans";
@@ -52,15 +53,70 @@ export const POST = apiRoute(async (request) => {
     throw new HttpError(409, "This ban has already been lifted.");
   }
 
-  const checkout = await stripeClient.createBanAppealCheckout({
-    appealId: appeal.id,
-    banId,
-    userId
-  });
+  const storedSessionId = appeal.stripe_checkout_session_id;
+  if (typeof storedSessionId === "string") {
+    const openCheckout = await stripeClient.getOpenBanAppealCheckout(
+      storedSessionId
+    );
+    if (openCheckout) {
+      return NextResponse.json({
+        checkout_url: openCheckout.checkout_url,
+        appeal_id: appeal.id,
+        provider: "stripe",
+        configured: openCheckout.configured
+      });
+    }
+  }
 
-  await store.update("ban_appeals", appeal.id, {
-    stripe_checkout_session_id: checkout.stripe_session_id
-  });
+  const claim = await store.claimBanAppealCheckoutAttempt(
+    appeal.id,
+    randomUUID()
+  );
+  if (!claim) {
+    throw new HttpError(404, "Ban appeal not found.");
+  }
+
+  let checkout: Awaited<
+    ReturnType<typeof stripeClient.createBanAppealCheckout>
+  >;
+  if (claim.owner) {
+    try {
+      checkout = await stripeClient.createBanAppealCheckout({
+        appealId: appeal.id,
+        banId,
+        userId,
+        attemptId: claim.attemptId
+      });
+    } catch (error) {
+      await store.failBanAppealCheckoutAttempt(appeal.id, claim.attemptId);
+      throw error;
+    }
+
+    const stored = await store.completeBanAppealCheckoutAttempt(
+      appeal.id,
+      claim.attemptId,
+      checkout.stripe_session_id
+    );
+    if (!stored) {
+      throw new HttpError(409, "The checkout attempt is no longer active.");
+    }
+  } else {
+    const stripeSessionId = await store.waitForBanAppealCheckoutAttempt(
+      appeal.id,
+      claim.attemptId
+    );
+    if (!stripeSessionId) {
+      throw new HttpError(409, "The checkout attempt did not complete. Please retry.");
+    }
+
+    const openCheckout = await stripeClient.getOpenBanAppealCheckout(
+      stripeSessionId
+    );
+    if (!openCheckout) {
+      throw new HttpError(409, "The checkout session is no longer open. Please retry.");
+    }
+    checkout = openCheckout;
+  }
 
   return NextResponse.json(
     {
@@ -69,6 +125,6 @@ export const POST = apiRoute(async (request) => {
       provider: "stripe",
       configured: checkout.configured
     },
-    { status: 201 }
+    { status: claim.owner ? 201 : 200 }
   );
 });

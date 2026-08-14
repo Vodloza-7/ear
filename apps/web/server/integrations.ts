@@ -108,14 +108,15 @@ export const stripeClient = {
     appealId: string;
     banId: string;
     userId: string;
+    attemptId: string;
   }): Promise<CheckoutResult> {
-    const { appealId, banId, userId } = options;
+    const { appealId, banId, userId, attemptId } = options;
 
     if (!this.configured) {
       return {
         configured: false,
         checkout_url: `${settings.appBaseUrl}/account?appeal=${appealId}&preview=1`,
-        stripe_session_id: `preview_appeal_${appealId}`
+        stripe_session_id: `preview_appeal_${appealId}_${attemptId}`
       };
     }
 
@@ -146,13 +147,34 @@ export const stripeClient = {
         ]
       },
       {
-        idempotencyKey: `ban-appeal-review:${appealId}`
+        idempotencyKey: `ban-appeal-review:${appealId}:${attemptId}`
       }
     );
 
     return {
       configured: true,
       checkout_url: checkout.url ?? "",
+      stripe_session_id: checkout.id
+    };
+  },
+
+  async getOpenBanAppealCheckout(
+    stripeSessionId: string
+  ): Promise<CheckoutResult | null> {
+    if (!this.configured || stripeSessionId.startsWith("preview_")) {
+      return null;
+    }
+
+    const checkout = await this.client().checkout.sessions.retrieve(
+      stripeSessionId
+    );
+    if (checkout.status !== "open" || !checkout.url) {
+      return null;
+    }
+
+    return {
+      configured: true,
+      checkout_url: checkout.url,
       stripe_session_id: checkout.id
     };
   },
