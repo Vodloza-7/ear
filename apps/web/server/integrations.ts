@@ -34,6 +34,12 @@ export type CheckoutResult = {
   checkout_url: string;
   stripe_session_id: string;
 };
+export type BanAppealCheckoutStatus = {
+  status: "open" | "complete" | "expired";
+  payment_status: string;
+  checkout_url: string | null;
+  stripe_session_id: string;
+};
 
 export const stripeClient = {
   get configured(): boolean {
@@ -158,9 +164,9 @@ export const stripeClient = {
     };
   },
 
-  async getOpenBanAppealCheckout(
+  async getBanAppealCheckoutStatus(
     stripeSessionId: string
-  ): Promise<CheckoutResult | null> {
+  ): Promise<BanAppealCheckoutStatus | null> {
     if (!this.configured || stripeSessionId.startsWith("preview_")) {
       return null;
     }
@@ -168,14 +174,16 @@ export const stripeClient = {
     const checkout = await this.client().checkout.sessions.retrieve(
       stripeSessionId
     );
-    if (checkout.status !== "open" || !checkout.url) {
+    if (checkout.status !== "open" &&
+      checkout.status !== "complete" &&
+      checkout.status !== "expired") {
       return null;
     }
-
     return {
-      configured: true,
-      checkout_url: checkout.url,
-      stripe_session_id: checkout.id
+        status: checkout.status,
+        payment_status: checkout.payment_status,
+        checkout_url: checkout.url,
+        stripe_session_id: checkout.id
     };
   },
   async createSubscriptionCheckout(options: {

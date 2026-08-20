@@ -5,27 +5,49 @@ const { randomUUID } = vi.hoisted(() => ({
 }));
 
 vi.mock("crypto", () => ({ randomUUID }));
+
 vi.mock("@server/auth", () => ({
   currentUserId: vi.fn().mockResolvedValue("user-123")
 }));
-vi.mock("@server/bans", () => ({ isActiveBan: vi.fn(() => true) }));
+
+vi.mock("@server/bans", () => ({
+  isActiveBan: vi.fn(() => true)
+}));
+
 vi.mock("@server/http", () => ({
   HttpError: class HttpError extends Error {
-    constructor(public status: number, message: string) {
+    constructor(
+      public status: number,
+      message: string
+    ) {
       super(message);
     }
   },
-  apiRoute: (handler: (request: Request) => Promise<Response>) => handler,
-  parseBody: vi.fn().mockResolvedValue({ appeal_id: "appeal-123" })
+
+  apiRoute: (
+    handler: (request: Request) => Promise<Response>
+  ) => handler,
+
+  parseBody: vi.fn().mockResolvedValue({
+    appeal_id: "appeal-123"
+  })
 }));
+
 vi.mock("@server/integrations", () => ({
-  BAN_APPEAL_REVIEW: { amount_cents: 5000 },
+  BAN_APPEAL_REVIEW: {
+    amount_cents: 5000
+  },
+
   stripeClient: {
-    getOpenBanAppealCheckout: vi.fn(),
+    getBanAppealCheckoutStatus: vi.fn(),
     createBanAppealCheckout: vi.fn()
   }
 }));
-vi.mock("@server/schemas", () => ({ checkoutBanAppealRequest: {} }));
+
+vi.mock("@server/schemas", () => ({
+  checkoutBanAppealRequest: {}
+}));
+
 vi.mock("@server/store", () => ({
   store: {
     get: vi.fn(),
@@ -41,77 +63,156 @@ import { store } from "@server/store";
 import { POST } from "./route";
 
 const request = () =>
-  new Request("http://localhost/api/checkout/ban-appeal", {
-    method: "POST",
-    body: JSON.stringify({ appeal_id: "appeal-123" })
-  });
+  new Request(
+    "http://localhost/api/checkout/ban-appeal",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        appeal_id: "appeal-123"
+      })
+    }
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(store.get).mockImplementation(async (collection) => {
-    if (collection === "ban_appeals") {
+
+  vi.mocked(store.get).mockImplementation(
+    async (collection) => {
+      if (collection === "ban_appeals") {
+        return {
+          id: "appeal-123",
+          user_id: "user-123",
+          ban_id: "ban-123",
+          status: "payment_required",
+          review_fee_cents: 5000,
+          stripe_checkout_session_id: "cs-old"
+        };
+      }
+
       return {
-        id: "appeal-123",
+        id: "ban-123",
         user_id: "user-123",
-        ban_id: "ban-123",
-        status: "payment_required",
-        review_fee_cents: 5000,
-        stripe_checkout_session_id: "cs-old"
+        ban_type: "standard",
+        appeal_eligible: true,
+        status: "active"
       };
     }
-    return {
-      id: "ban-123",
-      user_id: "user-123",
-      ban_type: "standard",
-      appeal_eligible: true,
-      status: "active"
-    };
-  });
-  vi.mocked(store.claimBanAppealCheckoutAttempt).mockResolvedValue({
+  );
+
+  vi.mocked(
+    store.claimBanAppealCheckoutAttempt
+  ).mockResolvedValue({
     attemptId: "attempt-new",
     owner: true
   });
-  vi.mocked(store.completeBanAppealCheckoutAttempt).mockResolvedValue(true);
-  vi.mocked(store.failBanAppealCheckoutAttempt).mockResolvedValue();
+
+  vi.mocked(
+    store.completeBanAppealCheckoutAttempt
+  ).mockResolvedValue(true);
+
+  vi.mocked(
+    store.failBanAppealCheckoutAttempt
+  ).mockResolvedValue();
 });
 
 describe("ban appeal checkout retries", () => {
   it("reuses a stored Checkout Session while it is open", async () => {
-    vi.mocked(stripeClient.getOpenBanAppealCheckout).mockResolvedValue({
-      configured: true,
-      checkout_url: "https://checkout.stripe.test/open",
+    vi.mocked(
+      stripeClient.getBanAppealCheckoutStatus
+    ).mockResolvedValue({
+      status: "open",
+      payment_status: "unpaid",
+      checkout_url:
+        "https://checkout.stripe.test/open",
       stripe_session_id: "cs-old"
     });
 
     const response = await POST(request());
 
     expect(response.status).toBe(200);
-    expect(stripeClient.createBanAppealCheckout).not.toHaveBeenCalled();
-    expect(store.claimBanAppealCheckoutAttempt).not.toHaveBeenCalled();
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).not.toHaveBeenCalled();
+
+    expect(
+      store.claimBanAppealCheckoutAttempt
+    ).not.toHaveBeenCalled();
+  });
+
+  it("does not replace a completed paid Checkout Session", async () => {
+    vi.mocked(
+      stripeClient.getBanAppealCheckoutStatus
+    ).mockResolvedValue({
+      status: "complete",
+      payment_status: "paid",
+      checkout_url: null,
+      stripe_session_id: "cs-old"
+    });
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+
+    expect(body).toMatchObject({
+      appeal_id: "appeal-123",
+      provider: "stripe",
+      payment_status: "paid"
+    });
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).not.toHaveBeenCalled();
+
+    expect(
+      store.claimBanAppealCheckoutAttempt
+    ).not.toHaveBeenCalled();
   });
 
   it("creates a new attempt after the stored Checkout Session expires", async () => {
     randomUUID.mockReturnValue("attempt-new");
-    vi.mocked(stripeClient.getOpenBanAppealCheckout).mockResolvedValue(null);
-    vi.mocked(stripeClient.createBanAppealCheckout).mockResolvedValue({
+
+    vi.mocked(
+      stripeClient.getBanAppealCheckoutStatus
+    ).mockResolvedValue({
+      status: "expired",
+      payment_status: "unpaid",
+      checkout_url: null,
+      stripe_session_id: "cs-old"
+    });
+
+    vi.mocked(
+      stripeClient.createBanAppealCheckout
+    ).mockResolvedValue({
       configured: true,
-      checkout_url: "https://checkout.stripe.test/new",
+      checkout_url:
+        "https://checkout.stripe.test/new",
       stripe_session_id: "cs-new"
     });
 
     await POST(request());
 
-    expect(store.claimBanAppealCheckoutAttempt).toHaveBeenCalledWith(
+    expect(
+      store.claimBanAppealCheckoutAttempt
+    ).toHaveBeenCalledWith(
       "appeal-123",
-      "attempt-new"
+      "attempt-new",
+      "cs-old"
     );
-    expect(stripeClient.createBanAppealCheckout).toHaveBeenCalledWith({
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).toHaveBeenCalledWith({
       appealId: "appeal-123",
       banId: "ban-123",
       userId: "user-123",
       attemptId: "attempt-new"
     });
-    expect(store.completeBanAppealCheckoutAttempt).toHaveBeenCalledWith(
+
+    expect(
+      store.completeBanAppealCheckoutAttempt
+    ).toHaveBeenCalledWith(
       "appeal-123",
       "attempt-new",
       "cs-new"
@@ -122,34 +223,68 @@ describe("ban appeal checkout retries", () => {
     randomUUID
       .mockReturnValueOnce("attempt-failed")
       .mockReturnValueOnce("attempt-retry");
-    vi.mocked(stripeClient.getOpenBanAppealCheckout).mockResolvedValue(null);
-    vi.mocked(store.claimBanAppealCheckoutAttempt)
-      .mockResolvedValueOnce({ attemptId: "attempt-failed", owner: true })
-      .mockResolvedValueOnce({ attemptId: "attempt-retry", owner: true });
-    vi.mocked(stripeClient.createBanAppealCheckout)
-      .mockRejectedValueOnce(new Error("Stripe unavailable"))
+
+    vi.mocked(
+      stripeClient.getBanAppealCheckoutStatus
+    ).mockResolvedValue({
+      status: "expired",
+      payment_status: "unpaid",
+      checkout_url: null,
+      stripe_session_id: "cs-old"
+    });
+
+    vi.mocked(
+      store.claimBanAppealCheckoutAttempt
+    )
+      .mockResolvedValueOnce({
+        attemptId: "attempt-failed",
+        owner: true
+      })
+      .mockResolvedValueOnce({
+        attemptId: "attempt-retry",
+        owner: true
+      });
+
+    vi.mocked(
+      stripeClient.createBanAppealCheckout
+    )
+      .mockRejectedValueOnce(
+        new Error("Stripe unavailable")
+      )
       .mockResolvedValueOnce({
         configured: true,
-        checkout_url: "https://checkout.stripe.test/retry",
+        checkout_url:
+          "https://checkout.stripe.test/retry",
         stripe_session_id: "cs-retry"
       });
 
-    await expect(POST(request())).rejects.toThrow("Stripe unavailable");
+    await expect(
+      POST(request())
+    ).rejects.toThrow("Stripe unavailable");
+
     await POST(request());
 
-    expect(stripeClient.createBanAppealCheckout).toHaveBeenNthCalledWith(1, {
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).toHaveBeenNthCalledWith(1, {
       appealId: "appeal-123",
       banId: "ban-123",
       userId: "user-123",
       attemptId: "attempt-failed"
     });
-    expect(stripeClient.createBanAppealCheckout).toHaveBeenNthCalledWith(2, {
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).toHaveBeenNthCalledWith(2, {
       appealId: "appeal-123",
       banId: "ban-123",
       userId: "user-123",
       attemptId: "attempt-retry"
     });
-    expect(store.failBanAppealCheckoutAttempt).toHaveBeenCalledWith(
+
+    expect(
+      store.failBanAppealCheckoutAttempt
+    ).toHaveBeenCalledWith(
       "appeal-123",
       "attempt-failed"
     );
@@ -159,39 +294,81 @@ describe("ban appeal checkout retries", () => {
     randomUUID
       .mockReturnValueOnce("attempt-owner")
       .mockReturnValueOnce("attempt-other");
-    vi.mocked(stripeClient.getOpenBanAppealCheckout)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
+
+    vi.mocked(
+      stripeClient.getBanAppealCheckoutStatus
+    )
       .mockResolvedValueOnce({
-        configured: true,
-        checkout_url: "https://checkout.stripe.test/shared",
+        status: "expired",
+        payment_status: "unpaid",
+        checkout_url: null,
+        stripe_session_id: "cs-old"
+      })
+      .mockResolvedValueOnce({
+        status: "expired",
+        payment_status: "unpaid",
+        checkout_url: null,
+        stripe_session_id: "cs-old"
+      })
+      .mockResolvedValueOnce({
+        status: "open",
+        payment_status: "unpaid",
+        checkout_url:
+          "https://checkout.stripe.test/shared",
         stripe_session_id: "cs-shared"
       });
-    vi.mocked(store.claimBanAppealCheckoutAttempt)
-      .mockResolvedValueOnce({ attemptId: "attempt-owner", owner: true })
-      .mockResolvedValueOnce({ attemptId: "attempt-owner", owner: false });
-    vi.mocked(stripeClient.createBanAppealCheckout).mockResolvedValue({
+
+    vi.mocked(
+      store.claimBanAppealCheckoutAttempt
+    )
+      .mockResolvedValueOnce({
+        attemptId: "attempt-owner",
+        owner: true
+      })
+      .mockResolvedValueOnce({
+        attemptId: "attempt-owner",
+        owner: false
+      });
+
+    vi.mocked(
+      stripeClient.createBanAppealCheckout
+    ).mockResolvedValue({
       configured: true,
-      checkout_url: "https://checkout.stripe.test/shared",
+      checkout_url:
+        "https://checkout.stripe.test/shared",
       stripe_session_id: "cs-shared"
     });
-    vi.mocked(store.waitForBanAppealCheckoutAttempt).mockResolvedValue(
-      "cs-shared"
-    );
 
-    const responses = await Promise.all([POST(request()), POST(request())]);
+    vi.mocked(
+      store.waitForBanAppealCheckoutAttempt
+    ).mockResolvedValue("cs-shared");
 
-    expect(responses.map((response) => response.status).sort()).toEqual([
-      200,
-      201
+    const responses = await Promise.all([
+      POST(request()),
+      POST(request())
     ]);
-    expect(stripeClient.createBanAppealCheckout).toHaveBeenCalledTimes(1);
-    expect(stripeClient.createBanAppealCheckout).toHaveBeenCalledWith({
+
+    expect(
+      responses
+        .map((response) => response.status)
+        .sort()
+    ).toEqual([200, 201]);
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      stripeClient.createBanAppealCheckout
+    ).toHaveBeenCalledWith({
       appealId: "appeal-123",
       banId: "ban-123",
       userId: "user-123",
       attemptId: "attempt-owner"
     });
-    expect(store.completeBanAppealCheckoutAttempt).toHaveBeenCalledTimes(1);
+
+    expect(
+      store.completeBanAppealCheckoutAttempt
+    ).toHaveBeenCalledTimes(1);
   });
 });

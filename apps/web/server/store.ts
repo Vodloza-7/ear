@@ -98,7 +98,8 @@ export const store = {
 
   async claimBanAppealCheckoutAttempt(
     appealId: string,
-    proposedAttemptId: string
+    proposedAttemptId: string,
+    expectedSessionId?: string| null
   ): Promise<BanAppealCheckoutClaim | null> {
     const firestore = adminFirestore();
     const documentRef = firestore.collection("ban_appeals").doc(appealId);
@@ -108,6 +109,17 @@ export const store = {
       if (!snapshot.exists) return null;
 
       const appeal = snapshot.data() ?? {};
+      const currentSessionId =
+      typeof appeal.stripe_checkout_session_id === "string"
+      ? appeal.stripe_checkout_session_id
+      : null;
+
+      if (
+        appeal.status !== "payment_required" ||
+        currentSessionId !== expectedSessionId
+      ) {
+        return null;
+      }
       const pendingAttemptId = appeal.stripe_checkout_attempt_id;
       if (
         appeal.stripe_checkout_attempt_state === "pending" &&

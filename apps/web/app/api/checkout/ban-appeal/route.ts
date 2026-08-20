@@ -53,27 +53,65 @@ export const POST = apiRoute(async (request) => {
     throw new HttpError(409, "This ban has already been lifted.");
   }
 
-  const storedSessionId = appeal.stripe_checkout_session_id;
-  if (typeof storedSessionId === "string") {
-    const openCheckout = await stripeClient.getOpenBanAppealCheckout(
+const storedSessionId = appeal.stripe_checkout_session_id;
+const attemptFailed =
+  appeal.stripe_checkout_attempt_state === "failed";
+
+if (
+  typeof storedSessionId === "string" &&
+  !attemptFailed
+) {
+  const storedCheckout =
+    await stripeClient.getBanAppealCheckoutStatus(
       storedSessionId
     );
-    if (openCheckout) {
-      return NextResponse.json({
-        checkout_url: openCheckout.checkout_url,
-        appeal_id: appeal.id,
-        provider: "stripe",
-        configured: openCheckout.configured
-      });
-    }
+
+  if (!storedCheckout) {
+    throw new HttpError(
+      409,
+      "The existing checkout status could not be verified."
+    );
   }
 
-  const claim = await store.claimBanAppealCheckoutAttempt(
+  if (storedCheckout.status === "open") {
+    return NextResponse.json({
+      checkout_url: storedCheckout.checkout_url,
+      appeal_id: appeal.id,
+      provider: "stripe",
+      configured: true
+    });
+  }
+
+  if (storedCheckout.status === "complete") {
+    const paymentReceived =
+      storedCheckout.payment_status === "paid";
+
+    return NextResponse.json({
+      appeal_id: appeal.id,
+      provider: "stripe",
+      payment_status: paymentReceived
+        ? "paid"
+        : "processing",
+      message: paymentReceived
+        ? "Payment received. The appeal update is being processed."
+        : "Payment is still processing."
+    });
+  }
+}
+
+  const expectedSessionId =
+  typeof storedSessionId === "string"
+    ? storedSessionId
+    : null;
+
+const claim =
+  await store.claimBanAppealCheckoutAttempt(
     appeal.id,
-    randomUUID()
+    randomUUID(),
+    expectedSessionId
   );
   if (!claim) {
-    throw new HttpError(404, "Ban appeal not found.");
+    throw new HttpError(409, "The appeal payment state changed. Please try again.");
   }
 
   let checkout: Awaited<
@@ -101,22 +139,59 @@ export const POST = apiRoute(async (request) => {
       throw new HttpError(409, "The checkout attempt is no longer active.");
     }
   } else {
-    const stripeSessionId = await store.waitForBanAppealCheckoutAttempt(
-      appeal.id,
-      claim.attemptId
-    );
-    if (!stripeSessionId) {
-      throw new HttpError(409, "The checkout attempt did not complete. Please retry.");
-    }
+    const stripeSessionId =await store.waitForBanAppealCheckoutAttempt(
+    appeal.id,
+    claim.attemptId
+  );
 
-    const openCheckout = await stripeClient.getOpenBanAppealCheckout(
-      stripeSessionId
-    );
-    if (!openCheckout) {
-      throw new HttpError(409, "The checkout session is no longer open. Please retry.");
-    }
-    checkout = openCheckout;
-  }
+if (!stripeSessionId) {
+  throw new HttpError(
+    409,
+    "The checkout attempt did not complete. Please retry."
+  );
+}
+
+const sharedCheckout =
+  await stripeClient.getBanAppealCheckoutStatus(
+    stripeSessionId
+  );
+
+if (!sharedCheckout) {
+  throw new HttpError(
+    409,
+    "The shared checkout status could not be verified."
+  );
+}
+
+if (sharedCheckout.status === "open") {
+  return NextResponse.json({
+    checkout_url: sharedCheckout.checkout_url,
+    appeal_id: appeal.id,
+    provider: "stripe",
+    configured: true
+  });
+}
+
+if (sharedCheckout.status === "complete") {
+  const paymentReceived =
+    sharedCheckout.payment_status === "paid";
+
+  return NextResponse.json({
+    appeal_id: appeal.id,
+    provider: "stripe",
+    payment_status: paymentReceived
+      ? "paid"
+      : "processing",
+    message: paymentReceived
+      ? "Payment received. The appeal update is being processed."
+      : "Payment is still processing."
+  });
+}
+throw new HttpError(
+  409,
+  "The shared checkout session expired. Please retry."
+);
+}
 
   return NextResponse.json(
     {
