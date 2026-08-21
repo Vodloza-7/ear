@@ -194,6 +194,41 @@ export const store = {
       }
     });
   },
+  async failBanAppealCheckoutSession(
+    appealId: string,
+    stripeSessionId: string
+  ): Promise<boolean> {
+    const firestore = adminFirestore();
+    const documentRef = firestore.collection("ban_appeals")
+    .doc(appealId);
+    return firestore.runTransaction(
+    async (transaction) => {
+      const snapshot =
+        await transaction.get(documentRef);
+
+      if (!snapshot.exists) {
+        return false;
+      }
+
+      const appeal = snapshot.data() ?? {};
+
+      if (
+        appeal.status !== "payment_required" ||
+        appeal.stripe_checkout_session_id !==
+          stripeSessionId
+      ) {
+        return false;
+      }
+
+      transaction.update(documentRef, {
+        stripe_checkout_attempt_state: "failed",
+        updated_at: utcNow()
+      });
+
+      return true;
+    }
+  );
+},
 
   async waitForBanAppealCheckoutAttempt(
     appealId: string,

@@ -63,6 +63,10 @@ export const POST = apiRoute(async (request) => {
     (stripeEventType === "checkout.session.completed" ||
       stripeEventType === "checkout.session.async_payment_succeeded") &&
     checkoutSession?.payment_status === "paid";
+  const appealPaymentFailed =
+  stripeEventType ===
+    "checkout.session.async_payment_failed" &&
+  paymentType === "ban_appeal_review";
   auditPaymentWebHookReceived({ sessionId: auditSessionId, stripeEventId, stripeEventType });
   if (sessionId && paymentType !== "ban_appeal_review" && paymentCompleted) {
     await store.update("sessions", sessionId, { status: "paid" });
@@ -99,6 +103,20 @@ export const POST = apiRoute(async (request) => {
         status: "awaiting_review"
       });
     }
+  }
+}
+if (appealPaymentFailed) {
+  const appealId =
+    checkoutSession?.metadata?.appeal_id;
+
+  const stripeSessionId =
+    checkoutSession?.id;
+
+  if (appealId && stripeSessionId) {
+    await store.failBanAppealCheckoutSession(
+      appealId,
+      stripeSessionId
+    );
   }
 }
 return NextResponse.json({ status: "received", event_id: event.id });

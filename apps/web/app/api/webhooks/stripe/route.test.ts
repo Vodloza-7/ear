@@ -28,8 +28,10 @@ vi.mock("@server/store", () => ({
   store: {
     create: vi.fn(),
     get: vi.fn(),
-    update: vi.fn()
+    update: vi.fn(),
+    failBanAppealCheckoutSession: vi.fn()
   },
+
   utcNow: vi.fn(() => new Date("2026-08-07T00:00:00.000Z"))
 }));
 
@@ -115,6 +117,9 @@ beforeEach(() => {
     id: "appeal-123",
     status: "awaiting_review"
   });
+  vi.mocked(
+  store.failBanAppealCheckoutSession
+  ).mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -122,6 +127,30 @@ afterEach(() => {
 });
 
 describe("Stripe ban appeal payment webhook", () => {
+  it("marks the stored appeal checkout as failed after asynchronous payment failure", async () => {
+  const response = await POST(
+    stripeRequest({
+      eventType:
+        "checkout.session.async_payment_failed",
+      paymentStatus: "unpaid"
+    })
+  );
+
+  expect(response.status).toBe(200);
+
+  expect(
+    store.failBanAppealCheckoutSession
+  ).toHaveBeenCalledTimes(1);
+
+  expect(
+    store.failBanAppealCheckoutSession
+  ).toHaveBeenCalledWith(
+    "appeal-123",
+    "cs-123"
+  );
+
+  expect(store.update).not.toHaveBeenCalled();
+});
   it("verifies a signed webhook before advancing the appeal", async () => {
     Object.defineProperty(stripeClient, "webhookConfigured", {
       configurable: true,
