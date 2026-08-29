@@ -215,7 +215,8 @@ export const store = {
       if (
         appeal.status !== "payment_required" ||
         appeal.stripe_checkout_session_id !==
-          stripeSessionId
+          stripeSessionId ||
+          appeal.stripe_checkout_attempt_state !== "ready"
       ) {
         return false;
       }

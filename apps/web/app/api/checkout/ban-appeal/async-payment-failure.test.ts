@@ -76,7 +76,10 @@ vi.mock("@server/store", () => ({
 import { stripeClient } from "@server/integrations";
 import { store } from "@server/store";
 import { POST as checkoutPOST } from "./route";
-import { POST as webhookPOST } from "../../webhooks/stripe/route";
+import {
+  POST as webhookPOST
+} from "../../webhooks/stripe/route";
+
 let attemptState: string;
 let storedSessionId: string;
 
@@ -178,7 +181,8 @@ beforeEach(() => {
     async (appealId, stripeSessionId) => {
       if (
         appealId !== "appeal-123" ||
-        stripeSessionId !== storedSessionId
+        stripeSessionId !== storedSessionId ||
+        attemptState !== "ready"
       ) {
         return false;
       }
@@ -232,7 +236,8 @@ beforeEach(() => {
     ) => {
       if (
         appealId !== "appeal-123" ||
-        attemptId !== "attempt-retry"
+        attemptId !== "attempt-retry" ||
+        attemptState !== "pending"
       ) {
         return false;
       }
@@ -244,56 +249,139 @@ beforeEach(() => {
   );
 });
 
-describe("asynchronous ban appeal payment failure", () => {
-  it("creates exactly one new Checkout Session after the stored session fails", async () => {
-    await webhookPOST(
-      failedPaymentWebhookRequest()
-    );
+describe(
+  "asynchronous ban appeal payment failure",
+  () => {
+    it("creates exactly one new Checkout Session after the stored session fails", async () => {
+      await webhookPOST(
+        failedPaymentWebhookRequest()
+      );
 
-    expect(
-      store.failBanAppealCheckoutSession
-    ).toHaveBeenCalledWith(
-      "appeal-123",
-      "cs-old"
-    );
+      expect(
+        store.failBanAppealCheckoutSession
+      ).toHaveBeenCalledWith(
+        "appeal-123",
+        "cs-old"
+      );
 
-    expect(attemptState).toBe("failed");
+      expect(attemptState).toBe("failed");
 
-    const response = await checkoutPOST(
-      checkoutRequest()
-    );
+      const response = await checkoutPOST(
+        checkoutRequest()
+      );
 
-    expect(response.status).toBe(201);
+      expect(response.status).toBe(201);
 
-    expect(
-      store.claimBanAppealCheckoutAttempt
-    ).toHaveBeenCalledWith(
-      "appeal-123",
-      "attempt-retry",
-      "cs-old"
-    );
+      expect(
+        store.claimBanAppealCheckoutAttempt
+      ).toHaveBeenCalledWith(
+        "appeal-123",
+        "attempt-retry",
+        "cs-old"
+      );
 
-    expect(
-      stripeClient.createBanAppealCheckout
-    ).toHaveBeenCalledTimes(1);
+      expect(
+        stripeClient.createBanAppealCheckout
+      ).toHaveBeenCalledTimes(1);
 
-    expect(
-      stripeClient.createBanAppealCheckout
-    ).toHaveBeenCalledWith({
-      appealId: "appeal-123",
-      banId: "ban-123",
-      userId: "user-123",
-      attemptId: "attempt-retry"
+      expect(
+        stripeClient.createBanAppealCheckout
+      ).toHaveBeenCalledWith({
+        appealId: "appeal-123",
+        banId: "ban-123",
+        userId: "user-123",
+        attemptId: "attempt-retry"
+      });
+
+      expect(
+        store.completeBanAppealCheckoutAttempt
+      ).toHaveBeenCalledWith(
+        "appeal-123",
+        "attempt-retry",
+        "cs-new"
+      );
+
+      expect(attemptState).toBe("ready");
+      expect(storedSessionId).toBe("cs-new");
     });
 
-    expect(
-      store.completeBanAppealCheckoutAttempt
-    ).toHaveBeenCalledWith(
-      "appeal-123",
-      "attempt-retry",
-      "cs-new"
-    );
+    it("ignores a replayed old failure while the replacement is pending", async () => {
+      await webhookPOST(
+        failedPaymentWebhookRequest()
+      );
 
-    expect(storedSessionId).toBe("cs-new");
-  });
-});
+      expect(attemptState).toBe("failed");
+
+      let finishStripeCreation!: () => void;
+
+      const pausedStripeCreation =
+        new Promise<{
+          configured: boolean;
+          checkout_url: string;
+          stripe_session_id: string;
+        }>((resolve) => {
+          finishStripeCreation = () => {
+            resolve({
+              configured: true,
+              checkout_url:
+                "https://checkout.stripe.test/retry",
+              stripe_session_id: "cs-new"
+            });
+          };
+        });
+
+      vi.mocked(
+        stripeClient.createBanAppealCheckout
+      ).mockReturnValue(pausedStripeCreation);
+
+      const checkoutPromise = checkoutPOST(
+        checkoutRequest()
+      );
+
+      await vi.waitFor(() => {
+        expect(
+          stripeClient.createBanAppealCheckout
+        ).toHaveBeenCalledTimes(1);
+      });
+
+      expect(attemptState).toBe("pending");
+      expect(storedSessionId).toBe("cs-old");
+
+      await webhookPOST(
+        failedPaymentWebhookRequest()
+      );
+
+      expect(
+        store.failBanAppealCheckoutSession
+      ).toHaveBeenCalledTimes(2);
+
+      /*
+       * The replay must not change the replacement
+       * from pending back to failed.
+       */
+      expect(attemptState).toBe("pending");
+      expect(storedSessionId).toBe("cs-old");
+
+      finishStripeCreation();
+
+      const response = await checkoutPromise;
+
+      expect(response.status).toBe(201);
+
+      expect(
+        stripeClient.createBanAppealCheckout
+      ).toHaveBeenCalledTimes(1);
+
+      expect(
+        store.completeBanAppealCheckoutAttempt
+      ).toHaveBeenCalledWith(
+        "appeal-123",
+        "attempt-retry",
+        "cs-new"
+      );
+
+      expect(attemptState).toBe("ready");
+      expect(storedSessionId).toBe("cs-new");
+    });
+  }
+);
