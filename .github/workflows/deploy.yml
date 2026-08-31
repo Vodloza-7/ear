@@ -40,7 +40,7 @@ jobs:
           gcloud run deploy callsomeone-web \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
-            --source=apps/web \
+            --source=. \
             --allow-unauthenticated \
             --quiet \
             --env-vars-file=apps/web/.cloudrun.env.yaml \

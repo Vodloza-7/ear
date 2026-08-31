@@ -1,6 +1,6 @@
 # GitHub Actions deploy
 
-Pushes to `main` run [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), which redeploys `callsomeone-web` from `apps/web` (the Next.js app serves the API under `/api`).
+Pushes to `main` run [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), which redeploys `callsomeone-web` from the repository root. The root Docker build uses the committed npm lockfile, and the Next.js app serves the API under `/api`.
 
 The service deploys to Cloud Run in `ear-thabhelo` / `us-central1`.
 
@@ -36,7 +36,7 @@ No long-lived JSON keys are stored in GitHub. Authentication uses OIDC + Workloa
 ## Manual deploy (same as CI)
 
 ```bash
-gcloud run deploy callsomeone-web --project=ear-thabhelo --region=us-central1 --source=apps/web ...
+gcloud run deploy callsomeone-web --project=ear-thabhelo --region=us-central1 --source=. ...
 ```
 
 See [cloud-run.md](./cloud-run.md) for Secret Manager details.
