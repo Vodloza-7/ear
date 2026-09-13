@@ -88,6 +88,10 @@ export const reportRequest = z.object({
   details: z.string().max(5000).default("")
 });
 
+export const banAppealDecisionRequest = z.object({
+  appeal_id: z.string().min(1),
+  decision: z.enum(["approved", "denied"]),
+});
 export const hostStatusRequest = z.object({
   available: z.boolean(),
   note: z.string().max(500).default(""),

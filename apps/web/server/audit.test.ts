@@ -8,6 +8,7 @@ import {auditCallEnded } from "./audit";
 import {auditRecordingStored } from "./audit";
 import {auditBanCreated } from "./audit";
 import {auditBanAppealCreated } from "./audit";
+import {auditBanAppealDecision } from "./audit";
 
 describe("auditPaymentWebhookReceived", () => {
   it("returns the expected structured audit fields", () => {
@@ -303,11 +304,8 @@ describe("auditBanCreated", () => {
     expect(result.timestamp).toBeTruthy();
     expect(result.correlationId).toBeTruthy();
     expect(consoleSpy).toHaveBeenCalledOnce();
-
-
     consoleSpy.mockRestore();
   });
-
   it("does not include request bodies, tokens, or secrets", () => {
     const consoleSpy = vi
       .spyOn(console, "info")
@@ -382,4 +380,32 @@ describe("auditBanAppealCreated", () => {
 
     consoleSpy.mockRestore();
   });
+});
+describe("auditBanAppealDecision", () => {
+  it("returns the expected ban appeal decision audit fields", () => {
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    const result= auditBanAppealDecision({
+      appealId: "appeal-123",
+      decision: "approved",
+      reviewerId: "host-456",
+      userId: "user-789",
+      banId: "ban-101112",
+    });
+    expect(result.level).toBe("info");
+    expect(result.component).toBe("ban-appeal");
+    expect(result.auditEventType).toBe("ban_appeal_approved");
+    expect(result.appealId).toBe("appeal-123");
+    expect(result.decision).toBe("approved");
+    expect(result.reviewerId).toBe("host-456");
+    expect(result.userId).toBe("user-789");
+    expect(result.banId).toBe("ban-101112");
+    expect(result.timestamp).toBeTruthy();
+    expect(result.correlationId).toBeTruthy();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+
+    consoleSpy.mockRestore();
+  });
+  it
 });

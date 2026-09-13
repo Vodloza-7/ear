@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminFirestore } from "./firebase";
+import { HttpError } from "./http";
 
 export type Doc = Record<string, unknown> & { id: string };
 
@@ -279,5 +280,60 @@ export const store = {
       .limit(limit)
       .get();
     return snapshots.docs.map((snapshot) => normalize(snapshot.data() ?? {}));
-  }
-};
+  },
+  async decideBanAppeal(
+    appealId: string,
+    decision: "approved" | "denied",
+    reviewerId : string,
+  ){
+    const firestore = adminFirestore();
+    const appealRef = firestore.collection("ban_appeals").doc(appealId);
+    return firestore.runTransaction(async (transaction) => {
+    const appealSnapshot = await transaction.get(appealRef);
+    if (!appealSnapshot.exists) {
+      throw new Error(`Ban appeal with ID ${appealId} does not exist.`);
+    }
+    const appeal = appealSnapshot.data() ?? {};
+    if (appeal.status !== "awaiting_review") {
+      return null;
+    }
+    const banId = appeal.ban_id;
+    if (!banId) {
+      throw new Error(`Ban appeal with ID ${appealId} does not have an associated ban ID.`);
+    }
+    const banRef = firestore.collection("bans").doc(banId);
+    const banSnapshot = await transaction.get(banRef);
+    if (!banSnapshot.exists) {
+      throw new Error(`Ban with ID ${banId} does not exist.`);
+    }
+    const ban= banSnapshot.data() ?? {};
+    if (appeal.user_id !== ban.user_id) {
+      throw new Error(`Ban appeal user ID does not match ban user ID.`);
+    }
+    if (ban.status==="lifted"){
+      return null;
+    }
+    if (ban.ban_type === "extreme" ){
+      throw new HttpError(409, "Cannot approve appeal for extreme ban.");
+    }
+    const reviewedAt = new Date().toISOString();
+    transaction.update(appealRef, {
+      status: decision,
+      reviewed_by: reviewerId,
+      reviewed_at: reviewedAt,
+    });
+    if (decision === "approved") {
+      transaction.update(banRef, {
+        status: "lifted",
+      });
+    }
+    return {
+      appeal_id: appealId,
+      decision,
+      ban_id: banId,
+      user_id: appeal.user_id,
+      reviewed_by: reviewerId,
+      reviewed_at: reviewedAt,
+    };
+    });
+  }};

@@ -269,3 +269,40 @@ export function auditBanAppealCreated(
 console.info(JSON.stringify(auditRecord));
 return auditRecord;
 }
+type auditBanAppealDecisionInput = {
+    appealId?: string;
+    decision: "approved" | "denied";
+    reviewerId?: string;
+    userId?: string;
+    banId?: string;
+};
+type auditBanAppealDecisionRecord = {
+    timestamp: string;
+    correlationId: string;
+    level: "info";
+    component: "ban-appeal";
+    auditEventType: "ban_appeal_approved" | "ban_appeal_denied";
+    appealId: string | null;
+    decision: "approved" | "denied";
+    reviewerId: string | null;
+    userId: string | null;
+    banId: string | null;
+};
+export function auditBanAppealDecision(
+    input: auditBanAppealDecisionInput,
+): auditBanAppealDecisionRecord {
+    const auditRecord: auditBanAppealDecisionRecord = {
+        timestamp: new Date().toISOString(),
+        correlationId: crypto.randomUUID(),
+        level: "info",
+        component: "ban-appeal",
+        auditEventType: input.decision === "approved" ? "ban_appeal_approved" : "ban_appeal_denied",
+        appealId: input.appealId ?? null,
+        decision: input.decision,
+        reviewerId: input.reviewerId ?? null,
+        userId: input.userId ?? null,
+        banId: input.banId ?? null
+    };
+    console.info(JSON.stringify(auditRecord));
+    return auditRecord;
+}
