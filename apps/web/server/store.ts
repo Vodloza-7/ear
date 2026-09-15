@@ -291,27 +291,27 @@ export const store = {
     return firestore.runTransaction(async (transaction) => {
     const appealSnapshot = await transaction.get(appealRef);
     if (!appealSnapshot.exists) {
-      throw new Error(`Ban appeal with ID ${appealId} does not exist.`);
+      throw new HttpError(404, `Ban appeal with ID ${appealId} does not exist.`);
     }
     const appeal = appealSnapshot.data() ?? {};
     if (appeal.status !== "awaiting_review") {
-      return null;
+      throw new HttpError(409, "This ban appeal has already been decided or is not awaiting review.");
     }
     const banId = appeal.ban_id;
     if (!banId) {
-      throw new Error(`Ban appeal with ID ${appealId} does not have an associated ban ID.`);
+      throw new HttpError(409, `Ban appeal with ID ${appealId} does not have an associated ban ID.`);
     }
     const banRef = firestore.collection("bans").doc(banId);
     const banSnapshot = await transaction.get(banRef);
     if (!banSnapshot.exists) {
-      throw new Error(`Ban with ID ${banId} does not exist.`);
+      throw new HttpError(404, `Ban with ID ${banId} does not exist.`);
     }
     const ban= banSnapshot.data() ?? {};
     if (appeal.user_id !== ban.user_id) {
-      throw new Error(`Ban appeal user ID does not match ban user ID.`);
+      throw new HttpError(409, `Ban appeal user ID does not match ban user ID.`);
     }
-    if (ban.status==="lifted"){
-      return null;
+    if (ban.status !== "active") {
+      throw new HttpError(409, "The associated ban is not active.");
     }
     if (ban.ban_type === "extreme" ){
       throw new HttpError(409, "Cannot approve appeal for extreme ban.");

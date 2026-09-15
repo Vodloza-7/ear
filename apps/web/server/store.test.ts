@@ -259,8 +259,9 @@ describe("ban appeal decision ",  () =>{
       }),
     };
     transaction.get.mockResolvedValueOnce(appealSnapshot);
-    const result = await store.decideBanAppeal("appeal-123", "denied", "host-1");
-    expect(result).toBeNull();
+    await expect(
+      store.decideBanAppeal("appeal-123", "denied", "host-1")
+    ).rejects.toMatchObject({ status: 409 });
     expect(transaction.get).toHaveBeenCalledTimes(1);
     expect(transaction.update).not.toHaveBeenCalled();
   });
@@ -274,8 +275,9 @@ describe("ban appeal decision ",  () =>{
       }),
     };
     transaction.get.mockResolvedValueOnce(appealSnapshot);
-    const result = await store.decideBanAppeal("appeal-123", "denied", "host-1");
-    expect(result).toBeNull();
+    await expect(
+      store.decideBanAppeal("appeal-123", "denied", "host-1")
+    ).rejects.toMatchObject({ status: 409 });
     expect(transaction.get).toHaveBeenCalledTimes(1);
     expect(transaction.update).not.toHaveBeenCalled();
   });
@@ -284,25 +286,25 @@ describe("ban appeal decision ",  () =>{
       exists: false,
       data: () => undefined,
     };
-    transaction.get.mockRejectedValueOnce(appealSnapshot);
+    transaction.get.mockResolvedValueOnce(appealSnapshot);
     await expect(
       store.decideBanAppeal(
         "missing-appeal",
         "approved",
         "host-1",
       ),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ status: 404 });
     expect(transaction.get).toHaveBeenCalledTimes(1);
     expect(transaction.update).not.toHaveBeenCalled();
      }
   )
-  it("does not decide when the ban does not exist but the appeal exists and is eligible"), async () => {
+  it("does not decide when the ban does not exist but the appeal exists and is eligible", async () => {
     const appealSnapshot = {
-      exists: false,
+      exists: true,
       data: () => ({
         user_id: "user-123" ,
         ban_id: "missing-ban",
-        status: "awaiting review",
+        status: "awaiting_review",
       }),
     };
     const banSnapshot = {
@@ -315,8 +317,41 @@ describe("ban appeal decision ",  () =>{
       "approved",
       "host-1",
     ),
-  ).rejects.toThrow();
+  ).rejects.toMatchObject({ status: 404 });
   expect(transaction.get).toHaveBeenCalledTimes(2);
   expect(transaction.update).not.toHaveBeenCalled();
-  }
+  });
+
+  it.each([
+    [undefined, "approved"],
+    [undefined, "denied"],
+    ["unknown", "approved"],
+    ["unknown", "denied"],
+  ] as const)(
+    "rejects ban status %s for a %s decision without writing",
+    async (status, decision) => {
+      transaction.get
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            user_id: "user-123",
+            ban_id: "ban-456",
+            status: "awaiting_review",
+          }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            user_id: "user-123",
+            status,
+            ban_type: "standard",
+          }),
+        });
+
+      await expect(
+        store.decideBanAppeal("appeal-123", decision, "host-1"),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(transaction.update).not.toHaveBeenCalled();
+    },
+  );
 });
