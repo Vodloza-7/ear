@@ -221,11 +221,37 @@ describe("ban appeal decision ",  () =>{
         }),
     };
     transaction.get.mockResolvedValueOnce(appealSnapshot).mockResolvedValueOnce(banSnapshot);
-    await expect(store.decideBanAppeal("appeal-123", "approved", "host-1")).rejects.toThrowError(
-   "Cannot approve appeal for extreme ban."
-    );
+    await expect(store.decideBanAppeal("appeal-123", "approved", "host-1"))
+      .rejects.toMatchObject({ status: 409, message: "The associated ban is not eligible for review." });
     expect(transaction.update).not.toHaveBeenCalled();
   });
+  it.each([undefined, "unknown"])(
+    "rejects approval when ban_type is %s without writing",
+    async (banType) => {
+      const appealSnapshot = {
+        exists: true,
+        data: () => ({
+          user_id: "user-123",
+          ban_id: "ban-456",
+          status: "awaiting_review",
+        }),
+      };
+      const banSnapshot = {
+        exists: true,
+        data: () => ({
+          user_id: "user-123",
+          status: "active",
+          ban_type: banType,
+        }),
+      };
+      transaction.get.mockResolvedValueOnce(appealSnapshot).mockResolvedValueOnce(banSnapshot);
+
+      await expect(store.decideBanAppeal("appeal-123", "approved", "host-1"))
+        .rejects.toMatchObject({ status: 409 });
+      expect(transaction.get).toHaveBeenCalledTimes(2);
+      expect(transaction.update).not.toHaveBeenCalled();
+    },
+  );
   it("rejects a ban that belong to another user", async () => {
     const appealSnapshot = {
       exists: true,

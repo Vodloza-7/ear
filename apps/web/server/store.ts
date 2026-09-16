@@ -313,8 +313,8 @@ export const store = {
     if (ban.status !== "active") {
       throw new HttpError(409, "The associated ban is not active.");
     }
-    if (ban.ban_type === "extreme" ){
-      throw new HttpError(409, "Cannot approve appeal for extreme ban.");
+    if (ban.ban_type !== "standard") {
+      throw new HttpError(409, "The associated ban is not eligible for review.");
     }
     const reviewedAt = new Date().toISOString();
     transaction.update(appealRef, {
